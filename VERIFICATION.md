@@ -1,5 +1,73 @@
 # Verification ledger: standalone backup delivery review
 
+## Current two-root extension (previous release/settings owner-completed)
+
+Owner reports the30-file release green on c311e08 and merged at70629fcc..., with
+225 Linux tests on both patches and reported repository protections completed.
+Those are owner reports, not newly builder-run hosted checks. Builder verified
+the public exact-base manifest and cloned that source with no remote writes.
+
+NEW source-only extension: complete distribution38 files, exactly13 changed
+paths in its explicit predecessor-anchored scope migration. Existing native DB
+exporter, conformance recipe/workflow, artifact interface, vendored preservation
+helpers and4/36-package locks are unchanged. The initial seed, same-scope update
+and exact-final-SHA gates are not relaxed. New product mode is preserve only.
+
+Current builder evidence before final packaged-tree closure:
+
+- Complete packaged Windows suite in the separate36-package tool environment:
+  **329 passed, 2 skipped, 27 subtests passed**. Skips: unavailable symlink
+  privilege (no permission changes), and POSIX shell syntax (Linux-only).
+- Three new suites: **106 passed, 27 subtests passed**, no skips on normal
+  Windows3.13.9 outside the sandbox with disposable fixtures outside the code
+  tree. Includes ACTUAL Windows two-root copy/verification, native source write-
+  sharing denial (error32), and read-only DACL admission. No existing ACL changed.
+- Strict mypy passed for five modules (new copy, migration, capacity, source gate,
+  bootstrap). Pyflakes passed new source/tests. Imported frozen helper's seven
+  Linux-target errors remain open, not suppressed or called clean.
+- Capacity SQL ran only in-memory PGlite using synthetic schemas; native source
+  catalog permissions and actual capacity have NOT been measured by those tests.
+- New copy tests cover private-parent inheritance/exposed principals, exact two
+  roots, zero-byte/empty entries, scope/bounds, late source/destination additions,
+  content drift, partial writes, disk full, externally anchored manifest and
+  attempt-marker replacement/hardlinks/content mutation. Control files stay
+  bound/read-held through completion. WAL/lock bytes are preserved, never opened
+  as SQLite or promoted to integrity/restore/custody evidence.
+- Cipher-copy checks bind both held file identities, exact externally anchored
+  bytes/hash and the observed destination volume digest. They reject same-volume
+  copies and identity substitution; a volume digest is not physical independence,
+  encryption verification or authenticated custody. Error projection is bounded.
+- Independent inspection found four first-draft issues and two control-handle
+  gaps, then a verifier source-scope boundary gap. They were fixed and regressions
+  added, including refusal before payload reads and metadata-only cipher probes.
+  Final independent closure is
+  recorded separately; builder test counts are not independent reruns.
+- First disposable Linux run:317 passed/11 failed/3 skipped. The portable test
+  adapter unintentionally used a512MiB tmpfs against the unchanged1GiB native
+  free-space guard. Its fixture now supplies explicit synthetic capacity; the
+  full-disk tests still inject zero and native Windows tests retain actual disk
+  measurements. No production capacity check was relaxed.
+- Corrected complete Linux rerun: **328 passed, 3 skipped, 27 subtests passed**,
+  Python3.13.9 in an existing disposable image, no networking, read-only public
+  source mount, no host ports/capture mounts, dropped capabilities, temporary
+  writable fixture space. Skips: optional PGlite absent, two Windows-native tests.
+  Complete Windows rerun remained **329 passed, 2 skipped, 27 subtests passed**.
+  Linux strict mypy passed the same five maintained modules. This image is NOT
+  the separately hash-locked36-package hosted environment or Python3.13.16;
+  exact-final-SHA hosted checks on both supported patches remain mandatory.
+- Both complete runtime/tool dependency audits returned exit0, without ignores
+  or disabled audit paths. Locks and accepted native exporter are unchanged.
+  The source export contains38 files and its static non-stdlib imports remain
+  cryptography/packaging/pytest only; no UI/capture dependency was imported.
+
+No actual Forward/ForwardOps root, installed capsule, private journal/config,
+credential store, task, service, ACL or cloud/database state was changed. The
+owner's saved75/0 capture remains an unsigned report until separately verified.
+New exact-SHA hosted CI, owner-native acceptance, private cut, encryption,
+off-PC readback, live DB export, custody/restore and retention remain unproven.
+
+## Historical evidence for the earlier30-file release
+
 ## Current corrected package (privacy/governance/data boundary refresh)
 
 Owner has approved the sibling route in principle and reports an earlier
