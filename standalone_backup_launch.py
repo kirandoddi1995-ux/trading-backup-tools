@@ -94,7 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     stage = 'ARGUMENTS'
     try:
         parser = _Parser(description=__doc__)
-        parser.add_argument('--operation', choices=('backup', 'watch'), default='backup')
+        parser.add_argument('--operation', choices=('backup', 'watch', 'preserve'), default='backup')
         parser.add_argument('--reviewed-source')
         parser.add_argument('--confirm-run', action='store_true')
         args, tail = parser.parse_known_args(argv)
@@ -121,6 +121,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.operation == 'watch':
             import dependency_pair_watch
             return dependency_pair_watch.main(tail)
+        if args.operation == 'preserve':
+            import capture_roots_preserve
+            return capture_roots_preserve.main([*tail, '--reviewed-source', args.reviewed_source, '--confirm-run'])
         import live_database_backup
         return live_database_backup.main([*tail, '--reviewed-source', args.reviewed_source,
             '--source-profile', 'standalone-backup-v1', '--confirm-run'])

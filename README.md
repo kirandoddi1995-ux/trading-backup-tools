@@ -1,5 +1,28 @@
 # Decision: protect the database without waiving the application audit
 
+## Current owner checkpoint: repository/settings DONE; preservation extension
+
+The public sibling repository now exists. Owner reports green c311e08 checks,
+225 Linux passes on both patches, synthetic resilience and CodeQL, merged as
+70629fcc2a98814d6e0d8ea760ba27b70e5c819b. The protect-main ruleset and the
+reported free security settings are DONE, not an outstanding owner step. No
+agent changed those settings. The public exact-base manifest has been read and
+the exact public source cloned; settings/CI remain labelled owner-reported.
+
+For the NEW 38-file distribution and one exact-base13-path maintenance PR, read
+CAPTURE_PRESERVATION.md FIRST. Do not repeat the older inert-seed/new-repository
+instructions below. Existing native database backup acceptance can proceed on
+the accepted30-file release independently; it does not need this extension.
+The extension preserves BOTH quiescent Forward and ForwardOps roots as opaque
+default-stream files, adds pure capacity sampling/assessment, and changes no
+runtime locks, native exporter, signing helpers, artifact contract or workflows.
+No private copy, export, custody, retention or task change is commissioned here.
+
+Wednesday75/75 and both scheduled results0 are owner reports; saved audit15:40:26
+is not authenticated journal or remote-custody proof. Preserve the unique local
+cut before Thursday Prepare/Start. The new runbook contains the first read-only
+readiness block; subsequent private commands are delivered one block at a time.
+
 ## Recommendation and authority
 
 The previous recommendation coupled two different release units too tightly.
