@@ -1,5 +1,29 @@
 # Standalone native export: owner commissioning only, no restore/deletion
 
+## Current owner checkpoint
+
+The38-file accepted repository main475185c1b54d78ca5be66bbe9f71bbd5888be868
+and exact head9145fad CI are owner-reported green. Two-root preservation and
+external extraction are owner-verified; native DATABASE backup acceptance is
+still separate. No change to the exporter, conformance workflow, tool pins or
+requirements is needed to begin its synthetic gates. This documentation/name-
+guard maintenance must not become another delay for the accepted exporter.
+
+Issue reference blocks below ONE at a time. Hosted Linux synthetic may run at
+any time without private project data; Windows native/drill/live export require
+a quiet period after capture/audit, not concurrently with Thursday's session.
+Require SYNTHETIC_NATIVE_LOGICAL_RESTORE_PASSED with all ten cases true and
+synthetic_container_stopped_verified=true. The synthetic container is retained
+stopped until runner disposal, not deleted by this tool. An absent/skipped job
+is not acceptance. Remove ONLY the
+temporary conformance variable after its one dispatch, including failure.
+
+After export, require a fresh hidden-prompt7-Zip test BEFORE copying/accepting
+encryption. Use `7z t <new archive>` WITHOUT -p, password values or redirection;
+creation success and ciphertext hash alone cannot prove password recoverability.
+Then verify actual destination bytes/volume, full destination extraction and
+trusted manifest anchor. No deletion follows any of these steps automatically.
+
 STOP until the separate source repository's exact final SHA passes complete
 Backup quality on both Python patches, CodeQL AND Code scanning results. The
 owner merges and selects that externally reviewed merged SHA. No claim that
@@ -37,7 +61,8 @@ if($LASTEXITCODE -ne 0){throw 'Preview rejected'}
 Owner may temporarily set ONLY LIVE_BACKUP_CONFORMANCE_ENABLED=true in the NEW
 repository and dispatch Disposable live logical backup conformance with the
 confirmation ticked on the exact reviewed main. Remove that variable afterwards.
-Require all ten synthetic native cases and disposable cleanup verified. It uses
+Require all ten synthetic native cases and synthetic_container_stopped_verified
+true (stopped/retained, not deletion proof). It uses
 only synthetic PostgreSQL in two fresh isolated clusters, no project secrets,
 published ports, host PostgreSQL, private artifacts or scheduled runs.
 

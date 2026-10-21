@@ -68,7 +68,21 @@ SAFE_CODES = frozenset(('PUBLIC_ALLOWLIST_REQUIRED', 'NONLINK_PUBLIC_TREE_REQUIR
     'SOURCE_PAYLOAD_HASH_REQUIRED', 'NEW_LOCAL_PUBLIC_DESTINATION_REQUIRED',
     'NONLINK_PUBLIC_DESTINATION_REQUIRED', 'PUBLIC_EXPORT_INCOMPLETE', 'INVALID_ARGUMENTS',
     'ONE_EXPLICIT_OPERATION_REQUIRED', 'DUPLICATE_KEY', 'PERSONAL_HOME_PATH_IN_PUBLIC_PAYLOAD',
-    'EXACT_REVIEWED_PRIOR_RELEASE_REQUIRED'))
+    'EXACT_REVIEWED_PRIOR_RELEASE_REQUIRED', 'PRIVATE_CREDENTIAL_NAME_REJECTED'))
+
+
+def public_name(name: str) -> None:
+    """Reject reserved private names before file metadata or contents are read.
+
+    Exact distribution admission remains mandatory. This is defense in depth,
+    not a guarantee that arbitrary renamed secrets can be detected without DLP.
+    """
+    if ':' in name:
+        raise ValueError('PRIVATE_CREDENTIAL_NAME_REJECTED')
+    for part in name.replace('\\', '/').casefold().split('/'):
+        if (part.startswith(('client_secret', 'token.json', 'credentials.json', 'secrets.toml'))
+                or part == '.env' or part.startswith('.env.')):
+            raise ValueError('PRIVATE_CREDENTIAL_NAME_REJECTED')
 
 
 def public_privacy(payloads: dict[str, bytes]) -> None:
@@ -77,6 +91,8 @@ def public_privacy(payloads: dict[str, bytes]) -> None:
     Fixed service identities, OS installation paths and synthetic fixtures still
     require human review. Do not print the matched value or inferred username.
     """
+    for name in payloads:
+        public_name(name)
     pattern = re.compile(rb'(?i)(?:[a-z]:[\\/]+users[\\/]+|/(?:home|users)/)[^\\/\s\x22\x27]+')
     if any(pattern.search(raw) for raw in payloads.values()):
         raise ValueError('PERSONAL_HOME_PATH_IN_PUBLIC_PAYLOAD')
@@ -96,6 +112,7 @@ def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_public(root: Path, name: str) -> bytes:
+    public_name(name)
     if name not in {*MAP, *FILES, SOURCE_MANIFEST}:
         raise ValueError('PUBLIC_ALLOWLIST_REQUIRED')
     path = root / name
@@ -150,6 +167,7 @@ def verify_checkout(root: Path, expected_sha: str | None, staged: bool = False) 
     if Path(git(root, 'rev-parse', '--show-toplevel').decode().strip()).resolve() != root.resolve():
         raise ValueError('REVIEWED_SOURCE_REQUIRED')
     head = git(root, 'rev-parse', '--verify', 'HEAD', absent_head=staged).decode().strip()
+    _index_names(root)
     if staged:
         if expected_sha == EMPTY_TREE:
             if head:
@@ -175,6 +193,7 @@ def verify_update(root: Path, expected_base: str | None) -> None:
             or Path(git(root, 'rev-parse', '--show-toplevel').decode().strip()).resolve() != root.resolve()
             or git(root, 'rev-parse', '--verify', 'HEAD').decode().strip() != expected_base):
         raise ValueError('EXACT_REVIEWED_PRIOR_RELEASE_REQUIRED')
+    _index_names(root)  # admit ALL candidate names before predecessor payload reads
     previous = distribution(git(root, 'show', expected_base + ':' + MANIFEST))
     records = git(root, 'ls-tree', '-r', expected_base).splitlines()
     names: set[str] = set()
@@ -194,12 +213,8 @@ def verify_update(root: Path, expected_base: str | None) -> None:
     _verify_tree(root, expected_base, staged=True)
 
 
-def _verify_tree(root: Path, expected_sha: str, staged: bool) -> None:
-    if not staged and git(root, 'status', '--porcelain', '--untracked-files=all').strip():
-        raise ValueError('REVIEWED_SOURCE_REQUIRED')
-    # No --exclude-standard: ignored files/bytecode are not outside this gate.
-    if git(root, 'ls-files', '--others').strip():
-        raise ValueError('EXACT_STAGED_TREE_REQUIRED')
+def _index_names(root: Path) -> set[str]:
+    """Name/mode admission only; no payload metadata/content reads."""
     tracked = git(root, 'ls-files', '--stage', '-z').split(b'\0')
     names: set[str] = set()
     for line in filter(None, tracked):
@@ -207,11 +222,22 @@ def _verify_tree(root: Path, expected_sha: str, staged: bool) -> None:
         if match is None:
             raise ValueError('REGULAR_STAGE_ZERO_REQUIRED')
         name = match[1].decode('utf-8')
+        public_name(name)
         if name in names:
             raise ValueError('DUPLICATE_TRACKED_FILE')
         names.add(name)
     if names != FILES:
         raise ValueError('EXACT_DISTRIBUTION_REQUIRED')
+    return names
+
+
+def _verify_tree(root: Path, expected_sha: str, staged: bool) -> None:
+    if not staged and git(root, 'status', '--porcelain', '--untracked-files=all').strip():
+        raise ValueError('REVIEWED_SOURCE_REQUIRED')
+    # No --exclude-standard: ignored files/bytecode are not outside this gate.
+    if git(root, 'ls-files', '--others').strip():
+        raise ValueError('EXACT_STAGED_TREE_REQUIRED')
+    _index_names(root)
     value = distribution(read_public(root, MANIFEST))
     public_privacy({name: read_public(root, name) for name in FILES})
     prefix = ':' if staged else expected_sha + ':'
@@ -251,6 +277,10 @@ def export(root: Path, destination: Path) -> dict[str, Any]:
             or value['destinations'] != MAP):
         raise ValueError('SOURCE_MANIFEST_REQUIRED')
     payloads: dict[str, bytes] = {}
+    # Validate the complete path list before the first source payload read.
+    for source, target in MAP.items():
+        public_name(source)
+        public_name(target)
     for source, target in MAP.items():
         raw = read_public(root, source).replace(b'\r\n', b'\n')
         if sha(raw) != value['files'][source]:

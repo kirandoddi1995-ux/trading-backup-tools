@@ -415,3 +415,77 @@ def test_advisory_watch_is_opt_in_and_reuses_both_whole_profile_audits() -> None
     assert 'uses: ./.github/workflows/quality.yml' in text
     assert 'contents: read' in text and 'schedule:' in text
     assert 'secrets' not in text and 'continue-on-error' not in text
+
+
+@pytest.mark.parametrize('name', ['token.json', 'TOKEN.JSON', 'nested/Token.Json',
+    'nested\\CLIENT_SECRET.json', 'client_secret_other.json', 'token.json.bak',
+    '.env', 'private/.ENV.production', 'secrets.toml', 'Credentials.JSON',
+    'token.json/renamed.txt', 'C:token.json', 'C:client_secret.json'])
+def test_private_names_reject_before_metadata_or_contents(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setattr(Path, 'lstat', lambda *a, **k: pytest.fail('No metadata reads'))
+    monkeypatch.setattr(Path, 'read_bytes', lambda *a, **k: pytest.fail('No content reads'))
+    with pytest.raises(ValueError, match='PRIVATE_CREDENTIAL_NAME_REJECTED'):
+        gate.read_public(tmp_path, name)
+
+
+@pytest.mark.parametrize('name', ['tests/test_token_contract.py', 'BACKUP_ARTIFACT_INTERFACE.json',
+    'requirements-runtime.txt', 'CAPTURE_PRESERVATION.md'])
+def test_public_names_are_not_secret_content_detection(name: str) -> None:
+    gate.public_name(name)
+
+
+def test_private_payload_name_rejected_even_when_allowlist_widened(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gate, 'MAP', {'token.json': 'token.json'})
+    with pytest.raises(ValueError, match='PRIVATE_CREDENTIAL_NAME_REJECTED'):
+        gate.read_public(tmp_path, 'token.json')
+
+
+def test_private_target_export_is_rejected_before_payload_read(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / 'source'
+    source.mkdir()
+    monkeypatch.setattr(gate, 'MAP', {'safe.py': 'nested/TOKEN.JSON'})
+    manifest = dict(format=gate.FORMAT, source_base=gate.SOURCE_BASE,
+        files={'safe.py': gate.sha(b'opaque')}, destinations=gate.MAP)
+    def read(root: Path, name: str) -> bytes:
+        assert name == gate.SOURCE_MANIFEST, 'No source payload may be read'
+        return json.dumps(manifest).encode()
+    monkeypatch.setattr(gate, 'read_public', read)
+    with pytest.raises(ValueError, match='PRIVATE_CREDENTIAL_NAME_REJECTED'):
+        gate.export(source, tmp_path / 'not-created')
+    assert not (tmp_path / 'not-created').exists()
+
+
+def test_entire_index_name_list_precedes_any_payload_read(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    names = ['allowed.py', 'nested/TOKEN.JSON']
+    monkeypatch.setattr(gate, 'FILES', frozenset(names))
+    def git(root: Path, *args: str, **kwargs: Any) -> bytes:
+        if args[0] == 'ls-files' and '--stage' in args:
+            return b''.join(b'100644 '+b'a'*40+b' 0\t'+name.encode()+b'\0' for name in names)
+        return b''
+    monkeypatch.setattr(gate, 'git', git)
+    monkeypatch.setattr(gate, 'read_public', lambda *a: pytest.fail('No payload before names admission'))
+    with pytest.raises(ValueError, match='PRIVATE_CREDENTIAL_NAME_REJECTED'):
+        gate._verify_tree(tmp_path, 'a'*40, staged=True)
+
+
+@pytest.mark.parametrize('entry', ['update', 'checkout'])
+def test_actual_source_entry_points_preflight_index_before_prior_payloads(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, entry: str) -> None:
+    def git(root: Path, *args: str, **kwargs: Any) -> bytes:
+        if args == ('rev-parse', '--show-toplevel'):
+            return str(tmp_path).encode()
+        if args == ('rev-parse', '--verify', 'HEAD'):
+            return b'a'*40
+        if args[0] == 'ls-files':
+            return b'100644 '+b'b'*40+b' 0\ttoken.json\0'
+        pytest.fail('No predecessor or candidate payload read before names')
+    monkeypatch.setattr(gate, 'git', git)
+    with pytest.raises(ValueError, match='PRIVATE_CREDENTIAL_NAME_REJECTED'):
+        if entry == 'update':
+            gate.verify_update(tmp_path, 'a'*40)
+        else:
+            gate.verify_checkout(tmp_path, 'a'*40)

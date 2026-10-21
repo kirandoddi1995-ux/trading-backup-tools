@@ -6,10 +6,10 @@
     ".github/workflows/quality.yml": "a625d4dde5d166c5bca823cfc39a2fcbf40aa86781b692c36ed38ac77ab67a0c",
     "BACKUP_ARTIFACT_INTERFACE.json": "5678f4d380dd5f7263380da9d2784f93f8d5ed8be36d76daf265fa8b2ce1ac3b",
     "BACKUP_TOOL_DISTRIBUTION.json": null,
-    "CAPTURE_PRESERVATION.md": "d7c40d820c98910fa8dcafdeb28aada03754941a47e47f4bc7981089ccc32f02",
-    "NATIVE_EXPORT_RUNBOOK.md": "d9374ade58bbf5be11e4c2e0394cc834396d6cf7a4da367e46157d81a8fc5d36",
-    "README.md": "a616bedada395254e58904468d790282cd0ae99ed12e547c5975d1f407572f2c",
-    "VERIFICATION.md": "7b89ef2831d3006fe7126fe1f2b4082476357f1a5930cef5176d19ebac0db831",
+    "CAPTURE_PRESERVATION.md": "8b92173644d079f824e69e860a828fc0bcaba20304129bfd94c63d408d57e893",
+    "NATIVE_EXPORT_RUNBOOK.md": "ede3dac2b0f0a3543e239c0a351c103f207eaded1c6a502a5e7b46fac9c5d0cf",
+    "README.md": "12b1b5a35074396ce063e4c62deb58cbc0251f9901e750d43039f2614a86f6dd",
+    "VERIFICATION.md": "f420bab7d60ce61b0139433997cf1fb1a0c8d6ad9e75a5a1db99e6170360ce9c",
     "archive_preservation_inventory.py": "ec497442d9e5d779584a5153db6b15bcea07fe58b2fd2c79889ac8083b69de27",
     "archive_preservation_witness.py": "6348101f6e1ed5789854ee700539e2ca078b030c7b5a500d0d9a3901e05570cc",
     "backup_artifact_contract.py": "8131fcfbcbed894818fd8ddc9c36686345cbd0464ed264c8fbd9b9bede2824bc",
@@ -26,7 +26,7 @@
     "requirements-runtime.txt": "6e643b7f9849b9f41386d8a26f276953b65c10a2793b9f3022c57bcd7f7df620",
     "requirements-test.txt": "959cf5bcedd342623c0cde8edc84e695b0d5e0f471d3d4aaeaeb44eeb53dd1eb",
     "sql/backup_capacity_sample_read_only.sql": "6fb43ef549ae119a9e6b2709a428f8141c32dffdee7f7c86ec79a307adb44154",
-    "standalone_backup_contract.py": "86fca4dcb5dc243a8ff96b463ca9a76e1159b67fa1e8b59340db29e04799d0f5",
+    "standalone_backup_contract.py": "3675518c3b9afa10b700c6ca9e7b9c7ac4c97add3b67a79c2fbc36af19d594d2",
     "standalone_backup_launch.py": "9b92dd44fb4b1a08eb2ad0765bbf6ccac8a6758a3b0de178a49dcc63dec3ef32",
     "tests/test_archive_preservation_inventory.py": "f365b60c96129a5af180c12a33044f77fd5433a28b78be61a765a5ad1536ab2d",
     "tests/test_archive_preservation_witness.py": "6dc49e4d6cba1477b781c31f5d473ba1c6bab09525833bf0f6e8afb0bc7d41b3",
@@ -37,7 +37,7 @@
     "tests/test_dependency_pair_watch.py": "9ac5c185214fbd7c49ab890cb3571f928d7393e6d1035c0c9fc3d103edf09948",
     "tests/test_live_backup_conformance.py": "4b86b07d26452c2321648752655e96d146c253ac73ea27120f0ca7540af0ed11",
     "tests/test_live_database_backup.py": "9dfcd97789e1ae8f67b7432be9eef99079e1755c326d7f07d689b8eb5302d564",
-    "tests/test_standalone_backup_contract.py": "f8626235785203a03cb0104b606bd60e445fb1e5c0f84d332095eb869c1fb1d7"
+    "tests/test_standalone_backup_contract.py": "809c085023cd380ea84f1dba2964b045603076202acd38c0ff20f78be0341673"
   },
   "format": "standalone-backup-distribution-v1",
   "source_base": "563665a32e5454633b0c27256072a7249503c520"

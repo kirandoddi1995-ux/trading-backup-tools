@@ -1,5 +1,59 @@
 # Wednesday preservation and first live database backup: owner-controlled gates
 
+## Superseding owner checkpoint after PR2 (22Oct follow-through)
+
+Separate safety finding: the frozen application capture125153... operational
+profile still declares certifi2026.7.22, affected by critical
+GHSA-6q48-6c7w-9gw2. Do not create/run a capsule using those known affected pins;
+new reviewed capture-profile release required, not an in-place upgrade. No
+installed capsule was inspected here. The four-package backup RUNTIME contains
+no certifi; its separate tool/test lock pins patched certifi2026.10.19. Neither
+profile is blocked by that separate application issue on the audit evidence.
+
+Owner reports accepted main475185c1b54d78ca5be66bbe9f71bbd5888be868, exact head
+9145fad hosted328/3 on both Python patches and audits green. Both roots have
+been preserved/verified:1106files10651004bytes. Good encrypted external USB copy
+passed native destination/hash checks and extraction+full anchored verification.
+These are OWNER-VERIFIED reports, not builder private access, signed custody,
+database integrity or typed restore. The earlier instruction to preserve before
+Thursday Prepare is satisfied as reported; do not repeat or overwrite that cut.
+All12 old tasks were disabled by owner, not by this tooling.
+
+For the next7-path SAME-SCOPE maintenance use ordinary
+`standalone_backup_contract.py --check-update --base 475185c1b54d78ca5be66bbe9f71bbd5888be868`,
+not the historical30->38 migration checker
+below. Existing38-file scope/locks/native exporter/workflows stay unchanged.
+No new package is a dependency for Thursday's installed manual capture or for
+native acceptance of the accepted backup release.
+
+### Mandatory independent password/readback check for FUTURE generations
+
+Prefer7-Zip GUI format7z/AES-256/Encrypt file names, Show password OFF, both
+password confirmation fields. Creation success alone never counts. Immediately
+run a full separately prompted test, then destination extraction/manifest proof:
+
+```powershell
+$ErrorActionPreference='Stop'
+& 'C:\Program Files\7-Zip\7z.exe' t $newEncryptedArchive
+if($LASTEXITCODE -ne 0){throw 'Archive not accepted; preserve outcome and originals'}
+```
+
+No -p on this t command, no password on argv/environment, no redirection or
+transcript. The reported first failure does not establish universal bare-p
+behavior across every version. The good replacement must pass the same full
+path as any new generation. First failed ciphertext, plaintext cut and extract
+are NOT deleted automatically. Before reviewing cleanup, record exact private
+identities/generation hashes and ensure retained independently recoverable
+copies; original mutable roots are never cleanup targets. Second independent
+location and authenticated custody remain open, even after a USB hash match.
+
+Name-only reserved credential denial is now additional defense in depth at the
+public source gate, including nested/case variants and suffix backups. Exact
+allowlist/hash/index/final-SHA checks remain mandatory. No absolute guarantee
+against renamed secrets or manual bypass is claimed. No hook/settings change.
+
+## Historical initial extension instructions (not a second upload/copy request)
+
 Source-only maintenance package for trading-backup-tools, exact base
 70629fcc2a98814d6e0d8ea760ba27b70e5c819b. Nothing below commissions a copy,
 enables a task/workflow, changes an ACL, restores a database or permits deletion.
