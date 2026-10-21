@@ -1,5 +1,38 @@
 # Verification ledger: standalone backup delivery review
 
+## Follow-through maintenance on accepted475185c1 (22Oct)
+
+Separate source-verified capture hold: public125153... profile AND constraints
+declare certifi2026.7.22. Critical advisoryGHSA-6q48-6c7w-9gw2 covers it; no
+private installed environment or compromise was inferred. Capture needs a new
+reviewed profile; four-package backup runtime has no certifi and the separate
+tool/test lock pins patched2026.10.19. Backup audit success
+is not app/capture audit success or permission to install affected frozen pins.
+
+OWNER-VERIFIED/REPORTED: PR2 merged475185c1b54d78ca5be66bbe9f71bbd5888be868;
+head9145fad hosted328 passed/3 skipped on both Python patches, audits green.
+1106-file10651004-byte two-root cut/manifest verification, encrypted external USB
+destination check and extraction+all-file verification succeeded. Initial bad
+ciphertext did not count; good replacement and originals remain unchanged.
+Builder did NOT access any private copy, credential, journal or task.
+
+New SAME-SCOPE maintenance: seven existing target files change, total38 remains.
+Source-name rejection is before metadata/payload reads, batch-preflighted for
+source AND export destination and candidate-index names. Names are case-folded,
+nested/backslash/suffix forms included; exact scope/hashes/source gates remain.
+Renamed-secret detection, history scanning or guaranteed manual-bypass prevention
+are NOT claimed. Local workspace helper/ignore changes are NOT public payload.
+
+Builder focused source-gate/local-guard/runbook suites:104 passed, no skips
+(86 public source-gate tests,18 local helper/runbook tests). Full public
+Windows/Linux results and final staging evidence are recorded in the private
+follow-through handoff after final closure. Exact-final-SHA hosted CI remains
+mandatory; historical green checks are not new candidate acceptance. Original
+native backup acceptance, real export, same-generation typed restore/custody/
+cold readers/retention remain open. No requirement/workflow/exporter changed.
+
+## Historical verification records (superseded status where noted)
+
 ## Current two-root extension (previous release/settings owner-completed)
 
 Owner reports the30-file release green on c311e08 and merged at70629fcc..., with

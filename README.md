@@ -1,5 +1,49 @@
 # Decision: protect the database without waiving the application audit
 
+## Latest follow-through: accepted preservation, source hygiene and permanent tiering
+
+LATE SEPARATE CAPTURE SECURITY HOLD: public frozen producer125153... pins
+certifi2026.7.22 in its operational profile/constraints, affected by critical
+GHSA-6q48-6c7w-9gw2 (<2026.10.19). Installed runtime is not inspected and no
+compromise inferred. A new reviewed capture profile/capsule is needed; no
+in-place pin override or installing the known affected profile. Thursday source
+sequence is not security approval. Standalone backup's four-package profile has
+NO certifi and native backup acceptance proceeds independently.
+
+Owner reports PR2 merged as475185c1b54d78ca5be66bbe9f71bbd5888be868, exact head
+9145fad quality328/3 on both patches and audits green; protect-main/settings DONE.
+Both mutable capture roots now have an anchored opaque cut,1106files/10651004
+bytes, encrypted USB copy and destination extraction+manifest verification.
+Those facts are owner-verified, not a builder private-state read or custody claim.
+No repeat preservation, repository setup or settings change is required.
+
+This maintenance changes seven existing paths in the SAME38-file distribution:
+credential-name defense in source gate/tests; capture/native runbooks;
+README/VERIFICATION; generated manifest. No workflow/runtime/native exporter/
+producer change or new external dependency. Ordinary --check-update on exact
+475185c1b54d78ca5be66bbe9f71bbd5888be868, then exact-final-SHA CI/owner merge.
+It is NOT a dependency for Thursday capture or accepted native backup acceptance.
+
+Permanent storage choice: bounded hosted hot tier, exact recoverable immutable
+cold history, external independent encrypted replicas, Parquet for licensed
+analysis, restore/cold-reader proof BEFORE prune. Local Postgres is a disposable
+restore/research index, not a new exposed always-on primary. No paid activation,
+free-quota sharding or repeated compaction as a substitute for bounded retention.
+Daily copies of accumulating full roots need a later immutable-segment design.
+
+Owner-specific decision/Thursday/disposition/cleanup worksheets stay PRIVATE,
+outside both public source indexes; they may contain machine paths and private
+operational observations. Sanitized README/VERIFICATION/runbooks are public.
+Only listed seven payload changes go to this repository, never the working folder,
+credentials, upload-list JSONs or source template directory wholesale.
+
+An independent fresh-prompt archive test and destination extraction are required
+for every NEW generation. No automatic cleanup, key reuse or password argument.
+Optional free malware alerts are recommended, owner-only enablement; they do not
+replace hash locks, mandatory audits or exact-source admission.
+
+## Historical source-side decision record
+
 ## Current owner checkpoint: repository/settings DONE; preservation extension
 
 The public sibling repository now exists. Owner reports green c311e08 checks,
