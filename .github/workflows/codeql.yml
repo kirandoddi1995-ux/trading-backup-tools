@@ -1,0 +1,22 @@
+name: Standalone backup CodeQL
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:python

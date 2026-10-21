@@ -1,0 +1,20 @@
+{
+  "format": "opaque-backup-interface-spec-v1",
+  "handoff_format": "opaque-backup-handoff-v1",
+  "producer_manifest_version": "live-logical-backup-v1",
+  "artifact_byte_limits": {"database.dump": 4294967296, "roles.sql": 16777216, "toc.list": 16777216},
+  "manifest_byte_limit": 1048576,
+  "digest": "SHA-256 of exact original bytes; no newline or encoding normalization",
+  "producer_source": "Externally reviewed full 40-character commit SHA; not local HEAD discovery",
+  "receiver_obligations": [
+    "Reject unknown formats, duplicate keys, missing or extra artifact names and non-integer byte counts",
+    "Independently measure all bounded opaque bytes and compare with both manifest and handoff",
+    "Authenticate the generation and custody witness separately; supplied hashes are not provenance",
+    "Treat database.dump, roles.sql and toc.list as inert data until isolated restore admission",
+    "Inventory source and empty target event triggers before any DDL; compare access facts afterward",
+    "Keep cross-batch conflict policy and same-generation archive binding in the main restore repository",
+    "Never import sibling code, execute a TOC, source roles.sql, or infer deletion permission"
+  ],
+  "cross_repository_code_imports_allowed": false,
+  "custody_or_restore_authority": false
+}

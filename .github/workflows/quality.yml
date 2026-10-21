@@ -1,0 +1,68 @@
+name: Standalone backup quality
+on: [push, pull_request, workflow_call]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.13.9', '3.13.16']
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Create clean hash-locked backup/test environment outside checkout
+        run: |
+          python -m venv --without-pip "$RUNNER_TEMP/backup-test-env"
+          python -m pip --python "$RUNNER_TEMP/backup-test-env/bin/python" install --require-hashes --only-binary=:all: -r requirements-test.txt
+          echo "$RUNNER_TEMP/backup-test-env/bin" >> "$GITHUB_PATH"
+      - run: python -m pip check
+      - name: Verify externally selected exact source commit and complete distribution
+        env:
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python -B standalone_backup_contract.py --verify-commit "$REVIEWED_HEAD"
+      - run: python -m pyflakes *.py tests
+      - run: python -B live_database_backup.py
+      - run: python -B dependency_pair_watch.py
+      - run: python -B -m pytest -q -p no:cacheprovider
+      - name: Rehearse complete isolated startup through a preview-only backup dispatch
+        if: matrix.python == '3.13.9'
+        env:
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python -m venv --without-pip "$RUNNER_TEMP/backup-runtime"
+          python -m pip --python "$RUNNER_TEMP/backup-runtime/bin/python" install --require-hashes --only-binary=:all: -r requirements-runtime.txt
+          "$RUNNER_TEMP/backup-runtime/bin/python" -I -S -B standalone_backup_launch.py --reviewed-source "$REVIEWED_HEAD" --operation backup --confirm-run --mode preview
+      - name: Mandatory complete backup runtime audit
+        run: python -m pip_audit -r requirements-runtime.txt
+      - name: Mandatory complete installed tooling audit
+        run: python -m pip_audit
+      - name: Assert UI/capture dependencies absent, never merely ignored
+        run: python -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not names.intersection({'pillow','streamlit','pandas','matplotlib','upstox-python-sdk','google-genai'})"
+  resilience:
+    name: Backup synthetic resilience
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.9'
+      - name: Create separate clean resilience environment
+        run: |
+          python -m venv --without-pip "$RUNNER_TEMP/backup-resilience-env"
+          python -m pip --python "$RUNNER_TEMP/backup-resilience-env/bin/python" install --require-hashes --only-binary=:all: -r requirements-test.txt
+          echo "$RUNNER_TEMP/backup-resilience-env/bin" >> "$GITHUB_PATH"
+      - run: python -m pip check
+      - name: Partial streams, dead children, uncertain exit, full output and source-binding failures
+        run: python -B -m pytest -q -p no:cacheprovider tests/test_live_database_backup.py tests/test_standalone_backup_contract.py
