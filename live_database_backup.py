@@ -38,6 +38,12 @@ MAX_DUMP = 4 * 1024**3
 MAX_ROLES = 16 * 1024**2
 MAX_TOC = 16 * 1024**2
 MIN_FREE = 12 * 1024**3
+# Attribute-only opens do not participate in the sharing checks needed here.
+# FILE_LIST_DIRECTORY (same bit as FILE_READ_DATA) makes no-delete-share binding
+# effective. This requests an access right; it changes no ACL or privilege.
+DIRECTORY_GUARD_ACCESS = 0x0001 | 0x0080
+DIRECTORY_GUARD_SHARE = 0x0001 | 0x0002  # read/write sharing, deliberately no DELETE
+DIRECTORY_GUARD_MODEL = 'list-directory-no-delete-share-v2'
 SAFE_CODES = ('NATIVE_TIMEOUT', 'NATIVE_OUTPUT_BOUND', 'NATIVE_DIAGNOSTIC_BOUND',
     'NATIVE_PERMISSION_REVIEW', 'NATIVE_AUTH_REVIEW', 'NATIVE_TLS_REVIEW',
     'NATIVE_VERSION_REVIEW', 'NATIVE_EXIT_REVIEW', 'NATIVE_WARNING_REVIEW',
@@ -76,6 +82,17 @@ class JobBlocked(ValueError):
         self.phase = phase
         self.code = code
         super().__init__('OPAQUE_JOB_BLOCKED')
+
+
+class DirectoryDrillBlocked(ValueError):
+    """Fixed phase/outcome only; preserve unexpected moves, never raw paths."""
+    def __init__(self, phase: str, outcome: str, native_winerror: int | None,
+                 completed: Sequence[str]) -> None:
+        self.phase = phase
+        self.outcome = outcome
+        self.native_winerror = native_winerror
+        self.completed = tuple(completed)
+        super().__init__('NATIVE_FILE_CHANGED')
 
 
 def command(tool: str) -> tuple[str, ...]:
@@ -321,6 +338,10 @@ def _new_root(root: Path) -> tuple[int, int]:
     return created.st_dev, created.st_ino
 
 
+class _DirectoryFileIdInfo(ctypes.Structure):
+    _fields_ = [('volume', ctypes.c_uint64), ('file_id', ctypes.c_ubyte * 16)]
+
+
 class OutputDirectory(AbstractContextManager['OutputDirectory']):
     """Windows stable directory chain; CREATE_NEW uses the native volume path.
 
@@ -348,7 +369,8 @@ class OutputDirectory(AbstractContextManager['OutputDirectory']):
         try:
             _private_path(root / 'unused-output-name', output=True)
             for part in reversed((root, *root.parents)):
-                handle = self.kernel.CreateFileW(str(part), 0x80, 3, None, 3, 0x02200000, None)
+                handle = self.kernel.CreateFileW(str(part), DIRECTORY_GUARD_ACCESS,
+                    DIRECTORY_GUARD_SHARE, None, 3, 0x02200000, None)
                 if not handle or handle == ctypes.c_void_p(-1).value:
                     blocked('NATIVE_FILE_CHANGED')
                 self.handles.append(handle)
@@ -370,8 +392,19 @@ class OutputDirectory(AbstractContextManager['OutputDirectory']):
 
     def validate(self) -> None:
         _private_path(self.root / 'unused-output-name', output=True)
-        if (self.root.stat().st_dev, self.root.stat().st_ino) != self.root_id:
+        named = self.root.stat()  # ONE pathname identity observation, not mixed snapshots.
+        if self.held_identity() != self.root_id or (named.st_dev, named.st_ino) != self.root_id:
             blocked('NATIVE_FILE_CHANGED')
+
+    def held_identity(self) -> tuple[int, int]:
+        """Bind the ACTUAL held root handle, retaining full64/128-bit identifiers."""
+        if not self.handles:
+            blocked('NATIVE_FILE_CHANGED')
+        info = _DirectoryFileIdInfo()
+        if not self.kernel.GetFileInformationByHandleEx(self.handles[-1], 18,
+                ctypes.byref(info), ctypes.sizeof(info)):
+            blocked('NATIVE_FILE_CHANGED')
+        return int(info.volume), int.from_bytes(info.file_id, 'little')
 
     def open_new(self, name: str) -> BinaryIO:
         if name not in ('attempt.json', 'database.dump', 'roles.sql', 'toc.list', 'manifest.json'):
@@ -474,28 +507,44 @@ def directory_drill(root: Path) -> dict[str, Any]:
     child = root / 'guarded'
     child.mkdir(exist_ok=False)
     identity = (child.stat().st_dev, child.stat().st_ino)
-    def require_sharing_denial(source: Path, destination: Path) -> None:
+    completed: list[str] = []
+    phase = 'DRILL_DIRECTORY_GUARD_ADMISSION'
+    def require_sharing_denial(source: Path, destination: Path, check: str) -> None:
         _private_path(destination, output=True)
         try:
             source.rename(destination)
         except OSError as error:
-            if getattr(error, 'winerror', None) != 32:
-                blocked('NATIVE_FILE_CHANGED')
+            number = getattr(error, 'winerror', None)
+            number = number if type(number) is int and 0 < number <= 65535 else None
+            if number != 32:
+                raise DirectoryDrillBlocked(check, 'NON_SHARING_DENIAL', number, completed) from None
         else:
-            blocked('NATIVE_FILE_CHANGED')
-    with OutputDirectory(child, identity) as guard:
-        with guard.open_new('attempt.json') as output:
-            output.write(b'{"synthetic_only":true}')
-            output.flush()
-            require_sharing_denial(child / 'attempt.json', child / 'synthetic-moved.json')
-        # Child file is CLOSED: these must prove the directory guards themselves.
-        require_sharing_denial(child, root / 'guarded-moved')
-        require_sharing_denial(root, root.parent / (root.name + '-synthetic-moved'))
-        guard.validate()
+            raise DirectoryDrillBlocked(check, 'RENAME_SUCCEEDED', None, completed)
+        completed.append(check)
+    try:
+        with OutputDirectory(child, identity) as guard:
+            phase = 'DRILL_OPEN_FILE_RENAME'
+            with guard.open_new('attempt.json') as output:
+                output.write(b'{"synthetic_only":true}')
+                output.flush()
+                require_sharing_denial(child / 'attempt.json', child / 'synthetic-moved.json', phase)
+            # Child file is CLOSED: directory sharing must independently deny moves.
+            phase = 'DRILL_GUARDED_DIRECTORY_RENAME'
+            require_sharing_denial(child, root / 'guarded-moved', phase)
+            phase = 'DRILL_OWNED_ANCESTOR_RENAME'
+            require_sharing_denial(root, root.parent / (root.name + '-synthetic-moved'), phase)
+            phase = 'DRILL_FINAL_BINDING'
+            guard.validate()
+    except DirectoryDrillBlocked:
+        raise
+    except BaseException:
+        raise DirectoryDrillBlocked(phase, 'GUARD_OR_IO_REVIEW',
+            None, completed) from None
     return dict(status='SYNTHETIC_WINDOWS_DIRECTORY_LOCK_PASSED', source_connections=0,
         credential_reads=0, native_pg_invocations=0, synthetic_files_written=1,
         file_lock_verified=True, root_lock_verified=True, drill_owned_ancestor_lock_verified=True,
-        archive_custody_verified=False, restore_verified=False)
+        archive_custody_verified=False, restore_verified=False,
+        directory_guard_model=DIRECTORY_GUARD_MODEL, completed_checks=completed)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -572,6 +621,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = dict(status='BLOCKED', code=code, stage=stage,
             raw_error_printed=False, retry_authorised=False, restore_verified=False,
             deletion_authorised=False, approval_authority=False)
+        if type(error) is DirectoryDrillBlocked:
+            result.update(code='NATIVE_FILE_CHANGED', stage=error.phase,
+                failure_kind=error.outcome, native_winerror=error.native_winerror,
+                completed_checks=list(error.completed), drill_attempt_consumed=True,
+                unexpected_moves_preserved=True, directory_guard_model=DIRECTORY_GUARD_MODEL)
         exit_code = 2
     finally:
         if console is not None and not restore_console(console):

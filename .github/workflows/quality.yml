@@ -66,3 +66,61 @@ jobs:
       - run: python -m pip check
       - name: Partial streams, dead children, uncertain exit, full output and source-binding failures
         run: python -B -m pytest -q -p no:cacheprovider tests/test_live_database_backup.py tests/test_standalone_backup_contract.py
+  windows-directory-guard:
+    name: Windows directory guard synthetic
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - name: Select LF before checkout on this disposable runner only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git config --global core.autocrlf false
+          if($LASTEXITCODE -ne 0){throw 'Runner LF configuration failed'}
+          git config --global core.eol lf
+          if($LASTEXITCODE -ne 0){throw 'Runner LF configuration failed'}
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.9'
+      - name: Create exact isolated backup test profile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m venv --without-pip "$env:RUNNER_TEMP/backup-directory-tests"
+          if($LASTEXITCODE -ne 0){throw 'Environment creation failed'}
+          python -m pip --python "$env:RUNNER_TEMP/backup-directory-tests/Scripts/python.exe" install --require-hashes --only-binary=:all: -r requirements-test.txt
+          if($LASTEXITCODE -ne 0){throw 'Locked install failed'}
+          "$env:RUNNER_TEMP/backup-directory-tests/Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Verify externally selected complete source
+        env:
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          @'
+          import json
+          import os
+          from pathlib import Path
+          import standalone_backup_contract as gate
+          try:
+              root = Path.cwd().resolve()
+              report = dict(status='SOURCE_BINDING_DIAGNOSTIC_NOT_ACCEPTANCE',
+                  root_matches=Path(gate.git(root, 'rev-parse', '--show-toplevel').decode().strip()).resolve() == root,
+                  head_matches=gate.git(root, 'rev-parse', '--verify', 'HEAD').decode().strip() == os.environ['REVIEWED_HEAD'],
+                  sanitized_checkout_clean=not bool(gate.git(root, 'status', '--porcelain', '--untracked-files=all').strip()),
+                  raw_values_printed=False)
+              print(json.dumps(report))
+          except Exception:
+              print(json.dumps(dict(status='SOURCE_BINDING_DIAGNOSTIC_BLOCKED', raw_values_printed=False)))
+              raise SystemExit(1)
+          '@ | python -B -
+          if($LASTEXITCODE -ne 0){throw 'Source diagnostic failed; inspect fixed fields only'}
+          python -B standalone_backup_contract.py --verify-commit "$env:REVIEWED_HEAD"
+          if($LASTEXITCODE -ne 0){throw 'Strict source admission failed'}
+      - run: python -m pip check
+      - name: Native sharing, competing process, release controls and complete regression suite
+        run: python -B -m pytest -q -p no:cacheprovider

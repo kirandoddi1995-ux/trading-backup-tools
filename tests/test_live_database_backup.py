@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 from typing import Any, NoReturn
 
 import pytest
@@ -301,7 +302,15 @@ def test_windows_directory_chain_locks_and_replacement_before_create(tmp_path: P
         opened.append(args)
         return len(opened) if args[4] == 3 else ctypes.c_void_p(-1).value
     def tag(handle: int, kind: int, pointer: Any, size: int) -> int:
-        ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32))[0] = 0x10
+        if kind == 9:
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32))[0] = 0x10
+        elif kind == 18:
+            item = ctypes.cast(pointer, ctypes.POINTER(b._DirectoryFileIdInfo)).contents
+            item.volume = identity[0]
+            for index, byte in enumerate(identity[1].to_bytes(16, 'little')):
+                item.file_id[index] = byte
+        else:
+            raise AssertionError('Unexpected native information class')
         return 1
     def final(handle: int, buffer: Any, size: int, flags: int) -> int:
         buffer.value = '\\\\?\\Volume{11111111-1111-1111-1111-111111111111}\\private'
@@ -327,6 +336,7 @@ def test_windows_directory_chain_locks_and_replacement_before_create(tmp_path: P
                 guard.open_new('database.dump')
             assert len(opened) == count  # No private bytes created in replacement.
     assert all(args[2] == 3 for args in opened[:-1])  # No delete sharing on ancestors.
+    assert all(args[1] == 0x81 for args in opened[:-1])  # LIST_DIRECTORY participates in sharing.
     assert len(closed) == len(opened) - 1
 
 
@@ -409,3 +419,152 @@ def test_directory_drill_proves_file_root_and_only_new_ancestor(tmp_path: Path,
         with pytest.raises(ValueError, match='NATIVE_FILE_CHANGED'):
             b.directory_drill(root)
         assert len(attempts) == 1
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Actual Windows directory sharing; never POSIX acceptance')
+def test_native_directory_drill_denies_real_renames(tmp_path: Path) -> None:
+    result = b.directory_drill(tmp_path / 'new-native-drill')
+    assert result['file_lock_verified'] and result['root_lock_verified']
+    assert result['drill_owned_ancestor_lock_verified']
+    assert result['directory_guard_model'] == b.DIRECTORY_GUARD_MODEL
+    assert result['completed_checks'] == ['DRILL_OPEN_FILE_RENAME',
+        'DRILL_GUARDED_DIRECTORY_RENAME', 'DRILL_OWNED_ANCESTOR_RENAME']
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Reproduce attribute-only Windows semantics in synthetic namespace')
+def test_native_metadata_only_handle_does_not_pin_namespace(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / 'attribute-only'
+    root.mkdir()
+    with monkeypatch.context() as scope:
+        scope.setattr(b, 'DIRECTORY_GUARD_ACCESS', 0x80)
+        with b.OutputDirectory(root, (root.stat().st_dev, root.stat().st_ino)):
+            root.rename(tmp_path / 'attribute-only-moved')
+    assert (tmp_path / 'attribute-only-moved').is_dir()
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Competing Windows process; no owner state or tools')
+def test_native_other_process_cannot_rename_then_release_allows_it(tmp_path: Path) -> None:
+    root = tmp_path / 'own-parent'
+    child = root / 'own-child'
+    child.mkdir(parents=True)
+    script = ('import pathlib,sys; p=pathlib.Path(sys.argv[1]); '
+              'q=pathlib.Path(sys.argv[2]);\n'
+              'try: p.rename(q)\n'
+              'except OSError as e: sys.exit(0 if getattr(e,"winerror",None)==32 else 2)\n'
+              'else: sys.exit(3)\n')
+    with b.OutputDirectory(child, (child.stat().st_dev, child.stat().st_ino)):
+        for source, target in ((child, root / 'moved-child'), (root, tmp_path / 'moved-parent')):
+            outcome = subprocess.run((sys.executable, '-I', '-S', '-B', '-c', script,
+                str(source), str(target)), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=15, check=False)
+            assert outcome.returncode == 0
+    child.rename(root / 'moved-child')
+    root.rename(tmp_path / 'moved-parent')
+    assert (tmp_path / 'moved-parent/moved-child').is_dir()
+
+
+@pytest.mark.parametrize('outcome', ['move', 'access_denied', 'other'])
+def test_drill_error_names_exact_phase_without_raw_data(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, outcome: str) -> None:
+    root = tmp_path / 'fresh-drill'
+    monkeypatch.setattr(b, '_new_root', lambda p: p.mkdir())
+    monkeypatch.setattr(b, 'OutputDirectory', SyntheticDirectory)
+    monkeypatch.setattr(b, '_private_path', lambda *a, **k: None)
+    count = 0
+    rename = type(root).rename
+    def action(source: Path, target: Path) -> Path:
+        nonlocal count
+        count += 1
+        if count == 2 and outcome == 'move':
+            return rename(source, target)
+        error = OSError('private-sentinel-never-log')
+        error.winerror = 32 if count == 1 else (5 if outcome == 'access_denied' else 123)  # type: ignore[attr-defined]
+        raise error
+    monkeypatch.setattr(type(root), 'rename', action)
+    with pytest.raises(b.DirectoryDrillBlocked) as captured:
+        b.directory_drill(root)
+    error = captured.value
+    assert error.phase == 'DRILL_GUARDED_DIRECTORY_RENAME'
+    assert error.completed == ('DRILL_OPEN_FILE_RENAME',)
+    assert error.outcome == ('RENAME_SUCCEEDED' if outcome == 'move' else 'NON_SHARING_DENIAL')
+    assert error.native_winerror == (None if outcome == 'move' else (5 if outcome == 'access_denied' else 123))
+    assert 'private-sentinel' not in str(error)
+    assert (root / ('guarded-moved' if outcome == 'move' else 'guarded') / 'attempt.json').is_file()
+
+
+def test_native_windows_guard_job_is_mandatory_synthetic_only() -> None:
+    source = Path(__file__).resolve().parents[1] / '.github/workflows/quality.yml'
+    workflow = source.read_text(encoding='utf-8')
+    job = workflow.split('  windows-directory-guard:', 1)[1]
+    assert 'runs-on: windows-2022' in job and "python-version: '3.13.9'" in job
+    assert 'Windows directory guard synthetic' in job
+    assert '--require-hashes --only-binary=:all:' in job
+    assert '--verify-commit' in job and 'github.event.pull_request.head.sha || github.sha' in job
+    assert 'python -B -m pytest -q -p no:cacheprovider' in job
+    assert 'continue-on-error' not in job and 'secrets.' not in job
+    assert '--mode export' not in job and '--mode directory-drill' not in job
+
+
+@pytest.mark.parametrize('drift', ['none', 'held_device', 'held_id_high', 'named_id_high', 'query_failure'])
+def test_held_expected_and_named_identity_use_full_width_and_one_stat(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, drift: str) -> None:
+    import ctypes
+    from types import SimpleNamespace
+    expected = (2**63 + 19, 2**100 + 7)
+    held = (expected[0] + (1 if drift == 'held_device' else 0),
+            expected[1] + (2**64 if drift == 'held_id_high' else 0))
+    named = (expected[0], expected[1] + (2**64 if drift == 'named_id_high' else 0))
+    calls = 0
+    class Name:
+        def __truediv__(self, value: str) -> Path:
+            return tmp_path / value
+        def stat(self) -> Any:
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(st_dev=named[0], st_ino=named[1])
+    def query(handle: int, kind: int, pointer: Any, size: int) -> int:
+        assert handle == 123 and kind == 18 and size == 24
+        item = ctypes.cast(pointer, ctypes.POINTER(b._DirectoryFileIdInfo)).contents
+        item.volume = held[0]
+        for index, byte in enumerate(held[1].to_bytes(16, 'little')):
+            item.file_id[index] = byte
+        return 0 if drift == 'query_failure' else 1
+    guard = object.__new__(b.OutputDirectory)
+    monkeypatch.setattr(guard, 'root', Name(), raising=False)
+    guard.root_id, guard.handles = expected, [123]
+    guard.kernel = SimpleNamespace(GetFileInformationByHandleEx=query)
+    monkeypatch.setattr(b, '_private_path', lambda *a, **k: None)
+    if drift == 'none':
+        guard.validate()
+        assert guard.held_identity() == expected
+    else:
+        with pytest.raises(ValueError, match='NATIVE_FILE_CHANGED'):
+            guard.validate()
+    assert calls == 1
+
+
+def test_cli_drill_failure_reports_fixed_phase_and_never_raw_paths(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from types import SimpleNamespace
+    def fail(root: Path) -> NoReturn:
+        raise b.DirectoryDrillBlocked('DRILL_GUARDED_DIRECTORY_RENAME',
+            'RENAME_SUCCEEDED', None, ['DRILL_OPEN_FILE_RENAME'])
+    with monkeypatch.context() as scope:
+        scope.setattr(b.os, 'name', 'nt')
+        scope.setattr(b, 'sys', SimpleNamespace(version_info=(3, 13, 9)))
+        scope.setattr(b, 'Path', lambda value: tmp_path)
+        scope.setattr(b, 'reviewed_source', lambda *a: None)
+        scope.setattr(b, '_console', lambda: (None, 0, 0))
+        scope.setattr(b, 'restore_console', lambda *a: True)
+        scope.setattr(b, 'directory_drill', fail)
+        assert b.main(['--mode', 'directory-drill', '--confirm-run',
+            '--confirm-no-capture-running', '--run-root', 'private-sentinel']) == 2
+    output = capsys.readouterr().out
+    result = json.loads(output)
+    assert result['stage'] == 'DRILL_GUARDED_DIRECTORY_RENAME'
+    assert result['failure_kind'] == 'RENAME_SUCCEEDED'
+    assert result['completed_checks'] == ['DRILL_OPEN_FILE_RENAME']
+    assert result['native_winerror'] is None and result['retry_authorised'] is False
+    assert result['drill_attempt_consumed'] and result['unexpected_moves_preserved']
+    assert 'private-sentinel' not in output and str(tmp_path) not in output
