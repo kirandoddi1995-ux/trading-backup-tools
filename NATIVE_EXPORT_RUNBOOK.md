@@ -2,6 +2,32 @@
 
 ## Current owner checkpoint
 
+### 22 October synthetic fixture repair (base bf94d5a)
+
+Run 39711994101 failed before the first case because the exact pinned image
+reports `pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)`, while the fixture
+compared it with the shorter upstream string. The exporter, requirements, image
+digest, resource limits and workflow are unchanged. The corrected fixture
+compares the complete exact packaged version; it does not accept another patch.
+Fixed-label `failing_case` and numeric `fixture_exit_code` are now projected on
+failure; raw native errors, SQL, identities and environment values stay hidden.
+Independent review also found the old `! grep` assertions were exempt from Bash
+errexit. Explicit branches now reject both a forbidden password match and grep
+errors. Linux negative tests exercise clean, forbidden and missing-file cases.
+
+The failed run is preserved. After exact-final-SHA Quality (both Python patches),
+Resilience, CodeQL and code-scanning results pass and the owner merges the repair,
+record the NEW full merged SHA. Do not rerun the old failed workflow. Dispatch
+ONE new synthetic run on the repaired merged main with the confirmation ticked;
+temporarily set ONLY LIVE_BACKUP_CONFORMANCE_ENABLED=true and remove it afterwards.
+Require all ten cases and stopped-container verification, not just a green page.
+Then use a fresh clean tools checkout at that same merged SHA: source binding,
+fresh whole-profile audits, Windows directory drill, native tool/CA check, and
+ONE opaque export alone in a quiet period. No private export before both native
+gates pass. Any failure/unknown outcome stops the sequence for review.
+
+Historical checkpoints below do not supersede this repair or its new SHA gate.
+
 The38-file accepted repository main475185c1b54d78ca5be66bbe9f71bbd5888be868
 and exact head9145fad CI are owner-reported green. Two-root preservation and
 external extraction are owner-verified; native DATABASE backup acceptance is

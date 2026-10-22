@@ -1,5 +1,28 @@
 # Verification ledger: standalone backup delivery review
 
+## 22 October native fixture repair
+
+Builder reproduced the packaging-string mismatch using the unchanged public
+image digest: actual version includes `(Debian 17.11-1.pgdg12+2)`. The repaired
+fixture completed all ten native cases through the Windows Docker Desktop
+Linux-engine adapter, with stopped-container verification true. This is local
+Linux-container execution, NOT hosted acceptance, a Windows directory drill,
+private restore, authenticated custody, or permission to export/delete.
+
+The exact packaged version remains mandatory. Only fixed allow-listed failure
+phases and exit integers 1..255 can be reported; raw errors are never logged.
+The original hosted failure and previous acceptance records remain preserved.
+Fresh hosted exact-SHA CI and a NEW manual native conformance run are pending.
+Independent review identified Bash's inverted-command errexit exemption in the
+old password-absence assertions. Those assertions now fail on a match OR a grep
+error; real-shell negative tests are included. No exporter or workflow changed.
+
+Final builder suite results: native Windows Python3.13.9, 362 passed/7 skipped,
+27 subtests; Linux Python3.13.9, 366 passed/3 skipped, 27 subtests. Windows skips
+include five POSIX-shell cases; Linux skips include two Windows-sharing cases.
+Skips are not claimed as acceptance. Strict typing of the repaired module and
+local packaging/checking helpers is clean; this does not clear legacy app typing.
+
 ## Follow-through maintenance on accepted475185c1 (22Oct)
 
 Separate source-verified capture hold: public125153... profile AND constraints
