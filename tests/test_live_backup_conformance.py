@@ -115,3 +115,51 @@ def test_policy_acceptance_requires_exact_visible_ids_and_denied_mutation() -> N
     assert "EXCEPTION WHEN SQLSTATE '42501' THEN" in c.SCRIPT
     assert 'if psql' not in c.SCRIPT
     assert c.SCRIPT.index('SYNTHETIC_DENIED_UPDATE_UNEXPECTEDLY_ALLOWED') < c.SCRIPT.index('CASE:rls_and_policy')
+
+
+def test_exact_digest_packaging_version_not_relaxed() -> None:
+    assert "= 'pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)'" in c.SCRIPT
+    assert 'set -Eeuo pipefail' in c.SCRIPT
+    assert "trap 'rc=$?;" in c.SCRIPT
+    assert all('fixture_step=' + case in c.SCRIPT for case in c.CASES)
+
+
+@pytest.mark.parametrize('raw,phase,code', [
+    (b'FIXTURE_FAILURE:native_17_11:1\n', 'native_17_11', 1),
+    (b'private-sentinel\nFIXTURE_FAILURE:cluster_shutdown:137\n', 'cluster_shutdown', 137),
+    (b'FIXTURE_FAILURE:private-sentinel:1\n', None, None),
+    (b'FIXTURE_FAILURE:native_17_11:0\n', None, None),
+    (b'FIXTURE_FAILURE:native_17_11:256\n', None, None),
+    (b'FIXTURE_FAILURE:native_17_11:9999\n', None, None),
+    (b'FIXTURE_FAILURE:native_17_11:1\nFIXTURE_FAILURE:native_17_11:1\n', None, None),
+    (b'prefix FIXTURE_FAILURE:native_17_11:1\n', None, None),
+    (b'FIXTURE_FAILURE:native_17_11:1 private-sentinel\n', None, None),
+    (b'', None, None),
+])
+def test_fixed_redacted_failure_projection(raw: bytes, phase: str | None, code: int | None) -> None:
+    result = c.fixture_diagnostic(raw)
+    assert result == {'failing_case': phase, 'fixture_exit_code': code}
+    assert 'private-sentinel' not in json.dumps(result)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX failure injection executes in Linux CI')
+@pytest.mark.parametrize('mode', ['clean', 'sentinel', 'password_clause', 'missing'])
+def test_password_absence_checks_fail_closed_in_real_shell(tmp_path: Path, mode: str) -> None:
+    shell = shutil.which('bash')
+    if shell is None:
+        pytest.skip('Bash absent; Linux hosted gate still mandatory')
+    target = tmp_path / 'synthetic-roles.sql'
+    contents = {'clean': 'CREATE ROLE fixture;', 'sentinel': 'synthetic-not-a-credential',
+                'password_clause': "ALTER ROLE fixture PASSWORD 'synthetic';"}
+    if mode != 'missing':
+        target.write_text(contents[mode])
+    checks = c.ROLE_PASSWORD_CHECKS.replace('/tmp/roles.sql', '"$1"')
+    result = subprocess.run((shell, '--noprofile', '--norc', '-c', 'set -Eeuo pipefail\n' + checks,
+                             'synthetic-check', str(target)), stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False)
+    assert (result.returncode == 0) is (mode == 'clean')
+
+
+def test_password_check_does_not_use_errexit_exempt_inversion() -> None:
+    assert '! grep' not in c.SCRIPT
+    assert c.ROLE_PASSWORD_CHECKS.count('test "$?" -eq 1') == 2

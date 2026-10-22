@@ -26,11 +26,26 @@ IMAGE = 'postgres@sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1
 CASES = ('native_17_11', 'two_isolated_clusters', 'custom_archive_readable',
     'roles_without_passwords', 'typed_numeric_json_time', 'keys_and_constraints',
     'rls_and_policy', 'owner_and_grants', 'functions_and_trigger', 'sequence_restored')
+ROLE_PASSWORD_CHECKS = r'''if grep -q 'synthetic-not-a-credential' /tmp/roles.sql; then
+  false
+else
+  test "$?" -eq 1
+fi
+if grep -Eq 'PASSWORD[[:space:]]' /tmp/roles.sql; then
+  false
+else
+  test "$?" -eq 1
+fi'''
 # Every identifier/value is fixed disposable synthetic data, never a real row.
-SCRIPT = r'''set -euo pipefail
+SCRIPT = r'''set -Eeuo pipefail
 export LC_ALL=C
-test "$(pg_dump --version)" = 'pg_dump (PostgreSQL) 17.11'
+fixture_step=native_17_11
+trap 'rc=$?; printf "FIXTURE_FAILURE:%s:%s\n" "$fixture_step" "$rc"; exit "$rc"' ERR
+# Exact output of the existing digest, including its Debian packaging suffix.
+# Do not accept a different patch or replace the content-addressed image.
+test "$(pg_dump --version)" = 'pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)'
 printf 'CASE:native_17_11\n'
+fixture_step=two_isolated_clusters
 mkdir /tmp/source-socket /tmp/target-socket
 initdb -D /tmp/source -U fixture_source_admin -A trust >/dev/null
 initdb -D /tmp/target -U fixture_restore_admin -A trust >/dev/null
@@ -38,6 +53,7 @@ pg_ctl -D /tmp/source -o "-F -c listen_addresses='' -k /tmp/source-socket -p 543
 pg_ctl -D /tmp/target -o "-F -c listen_addresses='' -k /tmp/target-socket -p 5433" -l /tmp/target.log -w start >/dev/null
 test "$(pg_controldata /tmp/source | awk '/Database system identifier/{print $NF}')" != "$(pg_controldata /tmp/target | awk '/Database system identifier/{print $NF}')"
 printf 'CASE:two_isolated_clusters\n'
+fixture_step=custom_archive_readable
 export PGHOST=/tmp/source-socket PGPORT=5432 PGUSER=fixture_source_admin PGDATABASE=postgres
 psql -X -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 CREATE ROLE fixture_reader NOLOGIN NOBYPASSRLS PASSWORD 'synthetic-not-a-credential';
@@ -62,12 +78,13 @@ pg_dumpall --roles-only --no-role-passwords > /tmp/roles.sql
 pg_restore --list /tmp/database.dump > /tmp/toc.list
 test -s /tmp/toc.list
 printf 'CASE:custom_archive_readable\n'
-! grep -q 'synthetic-not-a-credential' /tmp/roles.sql
-! grep -Eq 'PASSWORD[[:space:]]' /tmp/roles.sql
+fixture_step=roles_without_passwords
+__ROLE_PASSWORD_CHECKS__
 export PGHOST=/tmp/target-socket PGPORT=5433 PGUSER=fixture_restore_admin PGDATABASE=template1
 psql -X -v ON_ERROR_STOP=1 -f /tmp/roles.sql >/dev/null
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT rolpassword IS NULL FROM pg_authid WHERE rolname='fixture_reader'")" = t
 printf 'CASE:roles_without_passwords\n'
+fixture_step=typed_numeric_json_time
 # Only the NEW disposable target, never any installed/external database.
 psql -X -v ON_ERROR_STOP=1 -c 'DROP DATABASE postgres' >/dev/null
 pg_restore --exit-on-error --create --dbname=template1 /tmp/database.dump >/dev/null
@@ -75,8 +92,10 @@ export PGDATABASE=postgres
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*)=2 AND bool_and(marked) AND min(value)=9.125 FROM fixture.rows")" = t
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT value=123456789.1234567890 AND details='{\"synthetic\":true,\"nested\":[1,null]}'::jsonb AND at='2001-01-01T21:34:05.123456+00'::timestamptz FROM fixture.rows WHERE id=1")" = t
 printf 'CASE:typed_numeric_json_time\n'
+fixture_step=keys_and_constraints
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*)=2 FROM pg_constraint WHERE conrelid='fixture.rows'::regclass AND contype IN ('p','c')")" = t
 printf 'CASE:keys_and_constraints\n'
+fixture_step=rls_and_policy
 test "$(psql -X -qAt -v ON_ERROR_STOP=1 -c "SET ROLE fixture_reader; SELECT string_agg(id::text,',' ORDER BY id) FROM fixture.rows")" = 1
 psql -X -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 SET ROLE fixture_reader;
@@ -93,21 +112,36 @@ SQL
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT relrowsecurity AND relforcerowsecurity AND pg_get_userbyid(relowner)='fixture_source_admin' FROM pg_class WHERE oid='fixture.rows'::regclass")" = t
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*)=1 FROM pg_policies WHERE schemaname='fixture' AND tablename='rows'")" = t
 printf 'CASE:rls_and_policy\n'
+fixture_step=owner_and_grants
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT has_table_privilege('fixture_reader','fixture.rows','SELECT') AND NOT has_table_privilege('fixture_reader','fixture.rows','UPDATE') AND NOT has_table_privilege('fixture_reader','fixture.rows','INSERT') AND NOT has_table_privilege('fixture_reader','fixture.rows','DELETE') AND pg_get_userbyid(relowner)='fixture_source_admin' FROM pg_class WHERE oid='fixture.rows'::regclass")" = t
 printf 'CASE:owner_and_grants\n'
+fixture_step=functions_and_trigger
 test "$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*)=1 FROM pg_trigger WHERE tgrelid='fixture.rows'::regclass AND tgname='mark' AND NOT tgisinternal AND tgfoid='fixture.mark()'::regprocedure")" = t
 printf 'CASE:functions_and_trigger\n'
+fixture_step=sequence_restored
 test "$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO fixture.rows(value,details,at) VALUES(1,'{}',now()) RETURNING id=3 AND marked")" = t
 printf 'CASE:sequence_restored\n'
+fixture_step=cluster_shutdown
 pg_ctl -D /tmp/source -m fast -w stop >/dev/null
 pg_ctl -D /tmp/target -m fast -w stop >/dev/null
 printf 'SYNTHETIC_NATIVE_BACKUP_CASES_PASSED\n'
-'''
+'''.replace('__ROLE_PASSWORD_CHECKS__', ROLE_PASSWORD_CHECKS)
 
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise ValueError('INVALID_ARGUMENTS')
+
+
+def fixture_diagnostic(raw: bytes) -> dict[str, Any]:
+    """Project only allow-listed phases and bounded numeric exit status."""
+    failures = re.findall(rb'^FIXTURE_FAILURE:([a-z0-9_]+):([0-9]{1,3})$', raw, re.MULTILINE)
+    if len(failures) != 1:
+        return dict(failing_case=None, fixture_exit_code=None)
+    phase, code = failures[0]
+    if phase.decode('ascii') not in (*CASES, 'cluster_shutdown') or not 1 <= int(code) <= 255:
+        return dict(failing_case=None, fixture_exit_code=None)
+    return dict(failing_case=phase.decode('ascii'), fixture_exit_code=int(code))
 
 
 def docker_args(name: str) -> tuple[str, ...]:
@@ -170,6 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                           if ('CASE:' + case + '\n').encode('ascii') in result.getvalue())
         report = dict(status='BLOCKED', code='SYNTHETIC_BACKUP_STOP_REVIEW', stage=stage,
             reason=public_code(error), last_completed_case=completed[-1] if completed else None,
+            **fixture_diagnostic(result.getvalue()),
             raw_error_printed=False, private_restore_verified=False, hosted_changes=0)
         exit_code = 2
     finally:
