@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,59 @@ import pytest
 import live_database_backup as backup
 import standalone_backup_contract as gate
 import standalone_backup_launch as launch
+
+
+def windows_source_job() -> str:
+    text = (Path(__file__).resolve().parents[1] / '.github/workflows/quality.yml').read_text(encoding='utf-8')
+    return text.split('  windows-directory-guard:', 1)[1]
+
+
+def test_windows_checkout_selects_lf_before_materializing_source() -> None:
+    job = windows_source_job()
+    before, after = job.split('- uses: actions/checkout@v5', 1)
+    assert 'git config --global core.autocrlf false' in before
+    assert 'git config --global core.eol lf' in before
+    assert before.count("if($LASTEXITCODE -ne 0)") == 2
+    assert 'git config --system' not in job and 'safe.directory' not in job
+    assert '--verify-commit "$env:REVIEWED_HEAD"' in after
+    assert 'continue-on-error' not in job
+
+
+@pytest.mark.parametrize('mismatch', ['none', 'root', 'head', 'dirty', 'git_error'])
+def test_windows_source_diagnostic_is_fixed_redacted_and_not_acceptance(tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], mismatch: str) -> None:
+    job = windows_source_job()
+    match = re.search(r"          @'\n(.*?)\n          '@ \| python -B -", job, re.S)
+    assert match is not None
+    script = '\n'.join(line[10:] for line in match[1].splitlines())
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('REVIEWED_HEAD', 'a' * 40)
+    def synthetic_git(root: Path, *args: str) -> bytes:
+        if mismatch == 'git_error':
+            raise ValueError('private-error-must-not-print')
+        if args == ('rev-parse', '--show-toplevel'):
+            return str(tmp_path / 'other' if mismatch == 'root' else tmp_path).encode()
+        if args == ('rev-parse', '--verify', 'HEAD'):
+            return (('b' if mismatch == 'head' else 'a') * 40).encode()
+        assert args == ('status', '--porcelain', '--untracked-files=all')
+        return b' M private-name-must-not-print' if mismatch == 'dirty' else b''
+    monkeypatch.setattr(gate, 'git', synthetic_git)
+    if mismatch == 'git_error':
+        with pytest.raises(SystemExit, match='1'):
+            exec(compile(script, '<reviewed-workflow-diagnostic>', 'exec'), {})
+    else:
+        exec(compile(script, '<reviewed-workflow-diagnostic>', 'exec'), {})
+    output = capsys.readouterr().out
+    result = json.loads(output)
+    assert result['raw_values_printed'] is False
+    if mismatch == 'git_error':
+        assert result == dict(status='SOURCE_BINDING_DIAGNOSTIC_BLOCKED', raw_values_printed=False)
+    else:
+        assert result == dict(status='SOURCE_BINDING_DIAGNOSTIC_NOT_ACCEPTANCE',
+            root_matches=mismatch != 'root', head_matches=mismatch != 'head',
+            sanitized_checkout_clean=mismatch != 'dirty', raw_values_printed=False)
+    for forbidden in (str(tmp_path), 'a' * 40, 'b' * 40, 'private-name', 'private-error'):
+        assert forbidden not in output
 
 
 def fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, bytes], list[tuple[str, ...]]]:

@@ -3,7 +3,7 @@
     ".github/workflows/advisory.yml": "227f2090b7e99af254d063e01ecf18bd0cc3a6f9737ced7b600e62655716ca41",
     ".github/workflows/codeql.yml": "85d2a7e064cbc3c16354e62132b030e1a4af46230eaf45b35096a73d8ebfb6db",
     ".github/workflows/live-backup-conformance.yml": "3bcb908fb02fc13a3b863c4e349d9fc998761793fce238a92c8c18cd8deb5a1e",
-    ".github/workflows/quality.yml": "89625abd3b99af4ace0762b890b121488d2b0a81c343c32de5e98ba32085ab42",
+    ".github/workflows/quality.yml": "e2859d1348c4c973c840201fa315ca7f821b836de02edb147ff738951b535bf6",
     "BACKUP_ARTIFACT_INTERFACE.json": "5678f4d380dd5f7263380da9d2784f93f8d5ed8be36d76daf265fa8b2ce1ac3b",
     "BACKUP_TOOL_DISTRIBUTION.json": null,
     "CAPTURE_PRESERVATION.md": "8b92173644d079f824e69e860a828fc0bcaba20304129bfd94c63d408d57e893",
@@ -37,7 +37,7 @@
     "tests/test_dependency_pair_watch.py": "9ac5c185214fbd7c49ab890cb3571f928d7393e6d1035c0c9fc3d103edf09948",
     "tests/test_live_backup_conformance.py": "b5c7c937de4fba542698dcaa58cf5c29ff574124bd81cdb8029360e78b67fd4c",
     "tests/test_live_database_backup.py": "34a9b2245b07e84fcf2ba0a2a5eec354bc045a40cf234a70bbe13720d6948180",
-    "tests/test_standalone_backup_contract.py": "809c085023cd380ea84f1dba2964b045603076202acd38c0ff20f78be0341673"
+    "tests/test_standalone_backup_contract.py": "17a43edca38f81125b43389079be269e2aa3cff77ce36e1def80bb20407d53bf"
   },
   "format": "standalone-backup-distribution-v1",
   "source_base": "563665a32e5454633b0c27256072a7249503c520"

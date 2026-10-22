@@ -71,6 +71,14 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
+      - name: Select LF before checkout on this disposable runner only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git config --global core.autocrlf false
+          if($LASTEXITCODE -ne 0){throw 'Runner LF configuration failed'}
+          git config --global core.eol lf
+          if($LASTEXITCODE -ne 0){throw 'Runner LF configuration failed'}
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -90,7 +98,29 @@ jobs:
       - name: Verify externally selected complete source
         env:
           REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python -B standalone_backup_contract.py --verify-commit "$env:REVIEWED_HEAD"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          @'
+          import json
+          import os
+          from pathlib import Path
+          import standalone_backup_contract as gate
+          try:
+              root = Path.cwd().resolve()
+              report = dict(status='SOURCE_BINDING_DIAGNOSTIC_NOT_ACCEPTANCE',
+                  root_matches=Path(gate.git(root, 'rev-parse', '--show-toplevel').decode().strip()).resolve() == root,
+                  head_matches=gate.git(root, 'rev-parse', '--verify', 'HEAD').decode().strip() == os.environ['REVIEWED_HEAD'],
+                  sanitized_checkout_clean=not bool(gate.git(root, 'status', '--porcelain', '--untracked-files=all').strip()),
+                  raw_values_printed=False)
+              print(json.dumps(report))
+          except Exception:
+              print(json.dumps(dict(status='SOURCE_BINDING_DIAGNOSTIC_BLOCKED', raw_values_printed=False)))
+              raise SystemExit(1)
+          '@ | python -B -
+          if($LASTEXITCODE -ne 0){throw 'Source diagnostic failed; inspect fixed fields only'}
+          python -B standalone_backup_contract.py --verify-commit "$env:REVIEWED_HEAD"
+          if($LASTEXITCODE -ne 0){throw 'Strict source admission failed'}
       - run: python -m pip check
       - name: Native sharing, competing process, release controls and complete regression suite
         run: python -B -m pytest -q -p no:cacheprovider
