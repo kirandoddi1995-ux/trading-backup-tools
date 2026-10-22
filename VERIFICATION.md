@@ -1,5 +1,25 @@
 # Verification ledger: standalone backup delivery review
 
+## Windows directory guard defect and reviewed candidate (base4f65e7d)
+
+Owner reported blocked drill, guarded-moved/attempt.json remaining, and no source
+connection/tool checks/export attempted. Builder did not inspect that private
+folder. A NEW synthetic fixture on Windows build26300 reproduced the metadata-only
+rename gap and verified LIST_DIRECTORY-based sharing denial with no ACL changes.
+Separate-process rename denial and post-release successful renames are tested.
+Held-handle/expected/pathname identities must also agree using full64/128-bit
+native IDs and a single pathname-stat observation; high-bit drift/query failure
+tests reject disagreement. Source binding is not inferred from a pathname alone.
+This proves synthetic API behavior, not the owner's private destination, host
+integrity, authenticated custody or permission to export. Final test counts and
+exact-source packaging checks are recorded in the PRIVATE upload/handoff guide.
+
+The same implementation is inherited by two-root preservation destination/source
+directory guards. Previous hash/readback/extraction evidence remains bytes-only.
+The independent capture-only source has no import of these two backup modules;
+no capture files, state, task, clock gate or source window were changed.
+New hosted Windows guard job and owner drill on a NEW merged release are pending.
+
 ## 22 October native fixture repair
 
 Builder reproduced the packaging-string mismatch using the unchanged public

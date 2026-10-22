@@ -2,6 +2,44 @@
 
 ## Current owner checkpoint
 
+### Current hold: Windows directory guard repair on base4f65e7d
+
+The owner's consumed Windows directory drill blocked before any tool/CA check or
+source connection. The listing is consistent with open-file rename denial then
+guarded-directory rename SUCCESS. Builder reproduced the same attribute-only
+handle behavior in synthetic folders on Windows build26300. FILE_READ_ATTRIBUTES
+alone is not sufficient to participate in the delete-sharing check. The guard
+now requests FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES (0x81), sharing read/write
+but NOT delete. This changes no ACL, privilege, source query or TLS gate. No
+fallback to the ineffective access mask is allowed if existing permissions deny it.
+The actual held root handle is also queried with FILE_ID_INFO and compared with
+the caller's expected identity and ONE pathname-stat snapshot. Full64-bit volume
+and128-bit file identifiers are retained; an equal pathname alone is not proof
+that the held handle refers to that directory. Query failure or disagreement blocks.
+
+New tests require actual sharing violation32 for file, guarded directory and
+drill-owned ancestor; WinError5 is NOT accepted. Separate-process competing
+rename and post-release success controls are native Windows tests. A new Windows
+synthetic CI job runs the complete suite. Failures report fixed drill phase,
+failure kind, bounded numeric native error and completed checks; no raw paths.
+
+Keep the old consumed folder, including any guarded-moved artifact, untouched.
+After the owner merges a reviewed NEW exact-SHA green release, use a NEW clean
+checkout of that merged SHA, fresh whole-profile audits and one new hosted
+synthetic run for that release. Then authorize ONE fresh Windows directory drill
+using a NEW never-created run root. Do not reuse/reset/rename-back/delete the old
+attempt or silently reuse its acceptance. Require all three lock proofs true and
+directory_guard_model=list-directory-no-delete-share-v2 before tool/CA admission.
+On any block preserve the new attempt and fixed diagnostics; no further retry.
+
+The two-root preservation/cipher tool subclasses the same directory guard. Its
+future operations also need this fixed release; earlier exact-byte/extraction
+proofs remain historical bytes evidence, NOT proof that namespace renames were
+prevented. The separate capture-only producer does not import either backup
+module; Friday is independent and still subject to its own clock/auth/Drive gates.
+
+Historical checkpoints below do not authorize a live export on4f65e7d.
+
 ### 22 October synthetic fixture repair (base bf94d5a)
 
 Run 39711994101 failed before the first case because the exact pinned image
